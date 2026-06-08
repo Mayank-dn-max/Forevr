@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Trace AI — Agent Observability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --sidebar-bg:#ffffff;--sidebar-w:220px;--sidebar-border:#e5e7eb;
+  --bg:#f3f4f8;--card:#ffffff;--card-b:#e5e7eb;--card-bh:#d1d5db;
+  --acc:#6366f1;--acc-dark:#4f46e5;--acc-bg:#eef2ff;--acc-b:#c7d2fe;
+  --ok:#16a34a;--ok-bg:#f0fdf4;--ok-b:#86efac;
+  --fail:#dc2626;--fail-bg:#fff1f2;--fail-b:#fca5a5;
+  --warn:#d97706;--warn-bg:#fffbeb;--warn-b:#fde68a;
+  --txt:#111827;--txt2:#6b7280;--txt3:#9ca3af;
+  --chart1:#4f46e5;--chart2:#f472b6;--chart3:#818cf8;
+  --r:10px;--rs:6px;--t:.16s ease;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--txt);min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--card-b);border-radius:99px}
+
+.layout{display:flex;min-height:100vh}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sidebar-w);background:var(--sidebar-bg);
+  border-right:1px solid var(--sidebar-border);
+  display:flex;flex-direction:column;
+  position:fixed;top:0;left:0;bottom:0;z-index:100;flex-shrink:0;
+}
+.sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid var(--sidebar-border)}
+.logo-row{display:flex;align-items:center;gap:9px}
+.logo-icon{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--acc),var(--acc-dark));
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+  box-shadow:0 2px 8px rgba(99,102,241,.3);
+}
+.logo-text{font-size:.88rem;font-weight:700;color:var(--txt);letter-spacing:-.01em}
+.logo-sub{font-size:.61rem;color:var(--txt3);margin-top:1px}
+.live-chip{
+  display:inline-flex;align-items:center;gap:5px;margin-top:10px;
+  padding:3px 8px;background:var(--ok-bg);border:1px solid var(--ok-b);border-radius:99px;
+}
+.live-dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:blink 1.6s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.live-label{font-size:.62rem;font-weight:600;color:var(--ok)}
+.live-cd{font-size:.59rem;color:var(--txt3);margin-left:1px}
+
+.sidebar-nav{padding:10px 8px;flex:1;display:flex;flex-direction:column;gap:1px;overflow-y:auto}
+.nav-section-lbl{font-size:.59rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--txt3);padding:10px 10px 4px}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--rs);
+  background:transparent;border:none;cursor:pointer;width:100%;
+  font-family:var(--font);font-size:.81rem;font-weight:500;
+  color:var(--txt2);transition:all var(--t);text-align:left;
+}
+.nav-item:hover{background:#f3f4f6;color:var(--txt)}
+.nav-item.active{background:var(--acc-bg);color:var(--acc);font-weight:600}
+.nav-icon{font-size:.9rem;flex-shrink:0;width:18px;text-align:center;opacity:.75}
+.nav-item.active .nav-icon{opacity:1}
+.nav-badge{
+  margin-left:auto;font-size:.58rem;font-weight:700;padding:1px 6px;
+  border-radius:99px;background:#fee2e2;color:#ef4444;
+}
+
+.sidebar-footer{
+  padding:12px 14px 16px;border-top:1px solid var(--sidebar-border);
+  display:flex;flex-direction:column;gap:6px;
+}
+.stat-row{display:flex;justify-content:space-between;align-items:center}
+.stat-lbl{font-size:.63rem;color:var(--txt3);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.stat-val{font-size:.78rem;font-weight:600;color:var(--txt2);font-family:var(--mono)}
+.stat-val.acc{color:var(--acc)}.stat-val.ok{color:var(--ok)}
+
+/* ── Main ── */
+.main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column}
+.page{display:none;flex-direction:column;flex:1}
+.page.active{display:flex}
+
+/* ── Top bar (breadcrumb) ── */
+.topbar{
+  display:flex;align-items:center;gap:8px;
+  padding:0 26px;height:52px;border-bottom:1px solid var(--card-b);
+  background:var(--card);position:sticky;top:0;z-index:50;flex-shrink:0;
+}
+.breadcrumb{display:flex;align-items:center;gap:6px;flex:1}
+.bc-home{font-size:.82rem;color:var(--txt3);cursor:pointer}
+.bc-home:hover{color:var(--txt2)}
+.bc-sep{color:var(--txt3);font-size:.75rem;opacity:.5}
+.bc-cur{font-size:.82rem;font-weight:600;color:var(--txt)}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.tb-icon-btn{background:transparent;border:1px solid var(--card-b);border-radius:var(--rs);padding:5px 8px;cursor:pointer;font-size:.82rem;color:var(--txt3);transition:all var(--t)}
+.tb-icon-btn:hover{border-color:var(--card-bh);color:var(--txt2)}
+
+/* ── Page header (below topbar) ── */
+.page-header{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:14px 26px;border-bottom:1px solid var(--card-b);
+  background:var(--card);
+}
+.page-title{font-size:1.1rem;font-weight:700;letter-spacing:-.02em;flex:1}
+.page-sub{font-size:.7rem;color:var(--txt3);margin-top:1px}
+
+.page-body{padding:20px 26px;flex:1}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;border-radius:var(--rs);
+  cursor:pointer;font-family:var(--font);font-size:.77rem;font-weight:600;
+  padding:7px 14px;border:none;transition:all var(--t);white-space:nowrap;
+}
+.btn-primary{background:var(--acc);color:#fff;box-shadow:0 1px 3px rgba(99,102,241,.25)}
+.btn-primary:hover{background:var(--acc-dark)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{background:var(--card);color:var(--txt2);border:1px solid var(--card-b)}
+.btn-secondary:hover{border-color:var(--card-bh);color:var(--txt)}
+.btn-ghost{background:transparent;color:var(--txt3);border:1px solid var(--card-b)}
+.btn-ghost:hover{border-color:var(--card-bh);color:var(--txt2)}
+.sp-anim{width:11px;height:11px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+.btn-primary.loading .sp-anim{display:block}.btn-primary.loading .btn-lbl{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.run-input{
+  background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);
+  color:var(--txt);font-family:var(--font);font-size:.77rem;padding:7px 11px;
+  width:220px;outline:none;transition:border-color var(--t);
+}
+.run-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(99,102,241,.08)}
+
+/* ── Overview charts page ── */
+.overview-tabs{display:flex;gap:0;border-bottom:1px solid var(--card-b);padding:0 26px;background:var(--card)}
+.ov-tab{background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:var(--font);font-size:.82rem;font-weight:500;color:var(--txt3);padding:10px 2px;margin-right:22px;transition:all var(--t)}
+.ov-tab:hover{color:var(--txt)}
+.ov-tab.active{color:var(--acc);border-bottom-color:var(--acc);font-weight:600}
+
+.overview-body{padding:22px 26px}
+.overview-top-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:20px 22px;margin-bottom:20px}
+.chart-title{font-size:.75rem;font-weight:600;color:var(--txt2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+.chart-value{font-size:1.6rem;font-weight:700;color:var(--txt);letter-spacing:-.03em;margin-bottom:16px}
+.bar-chart{display:flex;align-items:flex-end;gap:3px;height:80px}
+.mini-bar-chart{display:flex;align-items:flex-end;gap:3px;height:60px;margin-top:14px}
+.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px}
+.bar{border-radius:3px 3px 0 0;width:100%;transition:opacity .2s;flex-shrink:0}
+.bar:hover{opacity:.75}
+.bar-lbl{font-size:.52rem;color:var(--txt3);white-space:nowrap;text-align:center;overflow:hidden;flex-shrink:0}
+.bar-chart-purple .bar{background:var(--chart1)}
+.bar-chart-pink .bar{background:var(--chart2)}
+.bar-chart-blue .bar{background:var(--chart3)}
+
+.overview-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mini-chart-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:18px 20px}
+
+/* ── Trace table ── */
+.trace-table{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);overflow:hidden}
+.trace-table-header{
+  display:grid;grid-template-columns:130px 1fr 1fr 100px 80px 80px 90px;
+  padding:9px 16px;border-bottom:1px solid var(--card-b);
+  background:#f9fafb;gap:12px;
+}
+.th{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3)}
+
+.trace-row-wrap{border-bottom:1px solid var(--card-b);animation:popIn .18s ease both}
+.trace-row-wrap:last-child{border-bottom:none}
+@keyframes popIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.trace-row{
+  display:grid;grid-template-columns:130px 1fr 1fr 100px 80px 80px 90px;
+  padding:11px 16px;gap:12px;cursor:pointer;align-items:center;
+  transition:background var(--t);
+}
+.trace-row:hover{background:#fafafa}
+.trace-row.fail-row{background:#fff1f2}
+.trace-row.fail-row:hover{background:#fee2e2}
+
+.tr-ts{font-size:.73rem;color:var(--txt2);font-family:var(--mono)}
+.tr-text{font-size:.77rem;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-text.muted{color:var(--txt3)}
+.tr-model{display:flex;align-items:center;gap:5px;font-size:.74rem;color:var(--txt2)}
+.model-icon{width:16px;height:16px;border-radius:3px;background:var(--acc-bg);border:1px solid var(--acc-b);display:flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0}
+.tr-num{font-size:.77rem;font-family:var(--mono);color:var(--txt2)}
+.tr-cost{font-size:.77rem;font-family:var(--mono);color:var(--txt2)}
+.tr-rate{font-size:.77rem;font-weight:600}
+.tr-rate.ok{color:var(--ok)}.tr-rate.warn{color:var(--warn)}.tr-rate.bad{color:var(--fail)}
+.tr-rate.na{color:var(--txt3);font-weight:400}
+
+/* expand panel */
+.trace-expand{
+  max-height:0;overflow:hidden;
+  transition:max-height .4s cubic-bezier(.4,0,.2,1);
+  border-top:1px solid transparent;background:#fafafa;
+}
+.trace-row-wrap.open .trace-expand{max-height:8000px;border-top-color:var(--card-b)}
+.trace-expand-inner{padding:14px 16px 16px}
+
+/* ── Search / filter row ── */
+.search-row{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+.search-wrap{position:relative;min-width:180px;max-width:320px}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:.78rem;pointer-events:none}
+.search-input{
+  width:100%;background:var(--card);border:1px solid var(--card-b);border-radius:var(--rs);
+  color:var(--txt);font-family:var(--font);font-size:.77rem;
+  padding:7px 11px 7px 30px;outline:none;transition:border-color var(--t);
+}
+.search-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(99,102,241,.08)}
+.search-input::placeholder{color:var(--txt3)}
+.filter-btn{
+  display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--card-b);
+  border-radius:var(--rs);padding:6px 12px;font-family:var(--font);font-size:.77rem;
+  color:var(--txt2);cursor:pointer;transition:all var(--t);
+}
+.filter-btn:hover{border-color:var(--card-bh);color:var(--txt)}
+.filter-pills{display:flex;gap:5px;flex-wrap:wrap}
+.pill{
+  background:var(--card);border:1px solid var(--card-b);color:var(--txt2);
+  border-radius:99px;padding:4px 12px;font-size:.71rem;font-family:var(--font);cursor:pointer;transition:all var(--t);
+}
+.pill:hover{border-color:var(--card-bh);color:var(--txt)}
+.pill.on{background:var(--acc-bg);border-color:var(--acc-b);color:var(--acc);font-weight:600}
+.result-count{font-size:.71rem;color:var(--txt3);margin-left:auto}
+.view-toggle{display:flex;gap:2px;background:#f3f4f6;border:1px solid var(--card-b);border-radius:var(--rs);padding:2px}
+.vt-btn{background:transparent;border:none;border-radius:4px;cursor:pointer;font-family:var(--font);font-size:.72rem;font-weight:500;padding:4px 10px;color:var(--txt3);transition:all var(--t)}
+.vt-btn:hover{color:var(--txt)}
+.vt-btn.active{background:var(--card);color:var(--txt);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:2px 7px;font-size:.66rem;font-weight:600;border:1px solid transparent;white-space:nowrap}
+.b-ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-b)}
+.b-fail{background:var(--fail-bg);color:var(--fail);border-color:var(--fail-b)}
+.b-run{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-b)}
+.b-neu{background:#f3f4f6;color:var(--txt2);border-color:var(--card-b)}
+.b-acc{background:var(--acc-bg);color:var(--acc);border-color:var(--acc-b)}
+
+/* ── Span tree (inside expand panel) ── */
+.sp-tree-wrap{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.sp-tree-title{font-size:.69rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3);margin-bottom:10px}
+.st-node{position:relative}
+.st-children{margin-left:22px;position:relative}
+.st-children::before{content:'';position:absolute;left:-12px;top:0;bottom:16px;width:1px;background:linear-gradient(to bottom,var(--card-b),transparent)}
+.st-row{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:var(--rs);margin-bottom:2px;transition:background var(--t);position:relative}
+.st-row:hover{background:rgba(0,0,0,.018)}
+.st-children>.st-node>.st-row::before{content:'';position:absolute;left:-12px;top:15px;width:11px;height:1px;background:var(--card-b)}
+.st-row.is-fail{background:#fff1f2;border-left:2px solid #fca5a5;border-radius:0 var(--rs) var(--rs) 0}
+.st-row.is-phase{background:#f9fafb;border-left:2px solid var(--card-b);border-radius:0 var(--rs) var(--rs) 0}
+.st-row.is-phase.fail-phase{background:#fff8f5;border-left-color:var(--acc-b)}
+.si{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;border:1.5px solid;margin-top:1px}
+.si.agent_start{background:var(--ok-bg);border-color:var(--ok-b);color:var(--ok)}
+.si.phase{background:#f3f4f6;border-color:var(--card-b);color:var(--txt3)}
+.si.tool_call{background:#eff6ff;border-color:#bfdbfe;color:#2563eb}
+.si.llm_call{background:var(--acc-bg);border-color:var(--acc-b);color:var(--acc)}
+.si.agent_response{background:#f5f3ff;border-color:#ddd6fe;color:#7c3aed}
+.si.failure{background:var(--fail-bg);border-color:var(--fail-b);color:var(--fail)}
+.sdot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:8px}
+.sdot.success{background:var(--ok)}.sdot.failed{background:var(--fail)}.sdot.running{background:var(--warn);animation:blink 1.2s ease infinite}
+.sb{flex:1;min-width:0}
+.srow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px}
+.stag{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 5px;border-radius:3px;flex-shrink:0}
+.stag.agent_start{background:#dcfce7;color:#15803d}
+.stag.phase{background:#f3f4f6;color:var(--txt3)}
+.stag.tool_call{background:#dbeafe;color:#1d4ed8}
+.stag.llm_call{background:var(--acc-bg);color:var(--acc)}
+.stag.agent_response{background:#ede9fe;color:#6d28d9}
+.stag.failure{background:var(--fail-bg);color:var(--fail)}
+.sname{font-weight:500;color:var(--txt);font-size:.79rem}
+.lat-wrap{display:flex;align-items:center;gap:7px;margin-top:4px;width:100%}
+.lat-bar-bg{flex:1;max-width:200px;height:4px;background:#f0f0f0;border-radius:99px;overflow:hidden;flex-shrink:0}
+.lat-bar-fill{height:100%;border-radius:99px;transition:width .6s ease}
+.lat-bar-fill.ok{background:var(--ok)}.lat-bar-fill.warn{background:var(--warn)}.lat-bar-fill.bad{background:var(--fail)}
+.lat-label{font-family:var(--mono);font-size:.61rem;color:var(--txt3);white-space:nowrap;flex-shrink:0}
+.rb{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-b)}
+.tb-badge{display:inline-flex;align-items:center;gap:3px;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--fail-bg);color:var(--fail);border:1px solid var(--fail-b)}
+.err-callout{margin-top:5px;padding:6px 9px;border-radius:var(--rs);background:var(--fail-bg);border:1px solid var(--fail-b);font-size:.69rem;color:#991b1b;font-family:var(--mono);display:flex;align-items:flex-start;gap:6px}
+.tok-sum{display:flex;gap:9px;flex-wrap:wrap;margin-top:4px;padding:5px 8px;border-radius:var(--rs);background:var(--acc-bg);border:1px solid var(--acc-b);font-size:.63rem;font-family:var(--mono)}
+.tok-sum .tk{color:var(--acc)}.tok-sum .tv{color:var(--txt);font-weight:600}.tok-sum .tc2{color:var(--ok);font-weight:700}
+.smeta{background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);padding:6px 9px;font-family:var(--mono);font-size:.64rem;color:var(--txt2);white-space:pre-wrap;word-break:break-all;line-height:1.55;margin-top:4px}
+.smeta .mk{color:var(--acc)}.smeta .ms{color:#065f46}.smeta .mn{color:#9a3412}.smeta .mb2{color:#7c3aed}
+.response-bubble{margin-top:5px;padding:9px 12px;border-radius:var(--rs);background:var(--ok-bg);border:1px solid var(--ok-b);border-left:3px solid var(--ok)}
+.response-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ok);margin-bottom:4px;opacity:.8}
+.response-text{font-size:.76rem;color:var(--txt);line-height:1.6;white-space:pre-wrap;word-break:break-word}
+
+/* meta strip below row */
+.trace-meta-strip{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:6px 16px 8px;border-top:1px solid var(--card-b);background:#f9faff;font-size:.69rem;
+}
+.judge-btn{background:var(--acc-bg);border:1px solid var(--acc-b);border-radius:5px;cursor:pointer;font-family:var(--font);font-size:.7rem;font-weight:600;padding:3px 9px;color:var(--acc);transition:all var(--t)}
+.judge-btn:hover{background:var(--acc);color:#fff}
+.judge-verdict{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid}
+.judge-verdict.grounded{background:var(--ok-bg);border-color:var(--ok-b);color:var(--ok)}
+.judge-verdict.partial{background:var(--warn-bg);border-color:var(--warn-b);color:var(--warn)}
+.judge-verdict.ungrounded{background:var(--fail-bg);border-color:var(--fail-b);color:var(--fail)}
+.judge-score{font-family:var(--mono);font-size:.64rem;color:var(--txt3)}
+.judge-reasoning{font-size:.66rem;color:var(--txt2);max-width:480px;line-height:1.4}
+.judge-loading{font-size:.7rem;color:var(--txt3)}
+.judge-error{font-size:.7rem;color:var(--fail)}
+.score-wrap{display:inline-flex;align-items:center;gap:2px}
+.score-btn{background:transparent;border:1px solid var(--card-b);border-radius:5px;cursor:pointer;font-size:.68rem;padding:2px 6px;line-height:1;transition:all var(--t);color:var(--txt3)}
+.score-btn:hover{border-color:var(--card-bh);background:var(--bg)}
+.score-btn.s-up{background:var(--ok-bg);border-color:var(--ok-b);color:var(--ok)}
+.score-btn.s-dn{background:var(--fail-bg);border-color:var(--fail-b);color:var(--fail)}
+.ds-icon-btn{background:transparent;border:1px solid var(--card-b);border-radius:5px;cursor:pointer;font-size:.68rem;padding:2px 6px;color:var(--txt3);transition:all var(--t)}
+.ds-icon-btn:hover{border-color:var(--acc-b);color:var(--acc);background:var(--acc-bg)}
+
+/* ── Empty ── */
+#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:80px 20px;text-align:center;color:var(--txt3)}
+#empty .ei{font-size:2.4rem;opacity:.35}
+#empty h2{font-size:.94rem;font-weight:600;color:var(--txt2)}
+#empty p{font-size:.75rem;max-width:290px;line-height:1.65}
+
+/* ── Insights ── */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.sc{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:14px 16px}
+.sc-lbl{font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--txt3);margin-bottom:5px}
+.sc-val{font-size:1.65rem;font-weight:700;letter-spacing:-.03em;line-height:1}
+.sc-val.crit{color:var(--fail)}.sc-val.warn-c{color:var(--warn)}.sc-val.ok-c{color:var(--ok)}.sc-val.dim{color:var(--txt2)}
+.insight-list{display:flex;flex-direction:column;gap:8px}
+.insight-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:14px 16px;border-left:3px solid transparent;transition:box-shadow var(--t)}
+.insight-card:hover{box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.insight-card.critical{border-left-color:var(--fail)}.insight-card.warning{border-left-color:var(--warn)}.insight-card.info{border-left-color:#60a5fa}
+.insight-row{display:flex;align-items:flex-start;gap:10px}
+.insight-icon{font-size:.9rem;margin-top:1px;flex-shrink:0}
+.insight-content{flex:1;min-width:0}
+.insight-title{font-size:.81rem;font-weight:600;color:var(--txt);margin-bottom:3px}
+.insight-msg{font-size:.73rem;color:var(--txt2);line-height:1.5;margin-bottom:5px}
+.insight-evidence{display:flex;flex-wrap:wrap;gap:5px}
+.ev-chip{font-size:.6rem;padding:2px 6px;border-radius:99px;background:#f3f4f6;color:var(--txt3);font-family:var(--mono);border:1px solid var(--card-b)}
+.insight-rec{margin-top:6px;font-size:.67rem;color:var(--txt3);border-top:1px solid var(--card-b);padding-top:5px;line-height:1.5}
+.insight-type-badge{font-size:.57rem;padding:1px 6px;border-radius:6px;border:1px solid var(--card-b);color:var(--txt3);font-family:var(--mono);margin-left:auto;flex-shrink:0}
+.ad-waiting,.ad-clean{font-size:.78rem;color:var(--txt3);padding:28px 0;display:flex;align-items:center;gap:8px}
+.ad-clean{color:var(--ok)}
+
+/* ── Datasets ── */
+.ds-form-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:16px;margin-bottom:18px;display:none}
+.ds-form-card.visible{display:block}
+.ds-form-title{font-size:.82rem;font-weight:600;margin-bottom:12px;color:var(--txt)}
+.ds-form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.ds-form-input{flex:1;min-width:150px;background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);color:var(--txt);font-family:var(--font);font-size:.77rem;padding:7px 10px;outline:none;transition:border-color var(--t)}
+.ds-form-input:focus{border-color:var(--acc)}
+.ds-form-btns{display:flex;gap:7px}
+.datasets-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.ds-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:16px;transition:all var(--t);display:flex;flex-direction:column;gap:10px}
+.ds-card:hover{border-color:var(--acc-b);box-shadow:0 2px 10px rgba(99,102,241,.08)}
+.ds-card-header{display:flex;align-items:flex-start;gap:10px}
+.ds-card-icon{width:32px;height:32px;border-radius:8px;background:var(--acc-bg);border:1px solid var(--acc-b);display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+.ds-card-name{font-size:.86rem;font-weight:600;color:var(--txt)}
+.ds-card-desc{font-size:.67rem;color:var(--txt3);margin-top:2px}
+.ds-card-meta{font-size:.67rem;color:var(--txt3)}
+.ds-card-count{font-weight:600;color:var(--acc);font-family:var(--mono)}
+.ds-card-btns{display:flex;gap:6px}
+.ds-card-btn{background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);color:var(--txt2);cursor:pointer;font-family:var(--font);font-size:.69rem;font-weight:500;padding:4px 10px;transition:all var(--t)}
+.ds-card-btn:hover{border-color:var(--acc-b);color:var(--acc);background:var(--acc-bg)}
+.ds-card-btn.del:hover{border-color:var(--fail-b);color:var(--fail);background:var(--fail-bg)}
+.empty-state{display:flex;flex-direction:column;align-items:center;gap:10px;padding:60px 20px;text-align:center;color:var(--txt3);grid-column:1/-1}
+.empty-state .ei{font-size:2.2rem;opacity:.35}
+.empty-state h3{font-size:.88rem;font-weight:600;color:var(--txt2)}
+.empty-state p{font-size:.73rem;max-width:260px;line-height:1.65}
+
+/* ── Evals ── */
+.eval-list{display:flex;flex-direction:column;gap:8px}
+.eval-row{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);padding:12px 16px;display:flex;align-items:center;gap:12px;transition:all var(--t)}
+.eval-row:hover{border-color:var(--acc-b);box-shadow:0 2px 8px rgba(99,102,241,.08)}
+.eval-verdict{display:inline-flex;align-items:center;gap:4px;font-size:.7rem;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid;flex-shrink:0}
+.eval-verdict.grounded{background:var(--ok-bg);border-color:var(--ok-b);color:var(--ok)}
+.eval-verdict.partial{background:var(--warn-bg);border-color:var(--warn-b);color:var(--warn)}
+.eval-verdict.ungrounded{background:var(--fail-bg);border-color:var(--fail-b);color:var(--fail)}
+.eval-name{flex:1;min-width:0}
+.eval-trace-name{font-size:.81rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eval-trace-id{font-size:.61rem;color:var(--txt3);font-family:var(--mono);margin-top:1px}
+.eval-score{font-family:var(--mono);font-size:.81rem;font-weight:700;color:var(--txt2);flex-shrink:0}
+.eval-reasoning{font-size:.69rem;color:var(--txt2);flex:1;min-width:0;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eval-model{font-size:.61rem;color:var(--txt3);font-family:var(--mono);flex-shrink:0}
+.eval-empty{font-size:.77rem;color:var(--txt3);padding:40px 0;text-align:center}
+
+/* ── Dataset picker ── */
+#dataset-picker{
+  display:none;position:fixed;z-index:1000;
+  background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);
+  padding:10px;width:240px;box-shadow:0 8px 28px rgba(0,0,0,.1);
+}
+.dp-title{font-size:.63rem;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px}
+.dp-list{display:flex;flex-direction:column;gap:1px;max-height:200px;overflow-y:auto;margin-bottom:6px}
+.dp-row{display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:var(--rs);cursor:pointer;transition:background var(--t);font-size:.77rem}
+.dp-row:hover{background:var(--bg)}
+.dp-row input[type=checkbox]{accent-color:var(--acc);cursor:pointer;flex-shrink:0}
+.dp-row-name{flex:1;color:var(--txt)}.dp-row-count{font-size:.6rem;color:var(--txt3);font-family:var(--mono)}
+.dp-empty{font-size:.72rem;color:var(--txt3);padding:4px 7px 7px}
+.dp-new{display:flex;gap:6px;padding-top:7px;border-top:1px solid var(--card-b)}
+.dp-input{flex:1;background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);color:var(--txt);font-family:var(--font);font-size:.73rem;padding:5px 8px;outline:none}
+.dp-input:focus{border-color:var(--acc)}
+.dp-create-btn{background:var(--acc-bg);border:1px solid var(--acc-b);border-radius:var(--rs);color:var(--acc);cursor:pointer;font-family:var(--font);font-size:.69rem;font-weight:600;padding:5px 9px;transition:all var(--t)}
+.dp-create-btn:hover{background:var(--acc);color:#fff}
+
+/* ── Trace detail page ── */
+.detail-layout{display:flex;flex:1;overflow:hidden;min-height:0}
+.detail-left{
+  width:38%;min-width:200px;max-width:72%;border-right:none;
+  display:flex;flex-direction:column;overflow:hidden;background:var(--card);flex-shrink:0;
+}
+#page-trace-detail{overflow:hidden}
+.detail-left-top{
+  padding:14px 16px 10px;border-bottom:1px solid var(--card-b);flex-shrink:0;
+}
+.detail-trace-title{font-size:.92rem;font-weight:700;color:var(--txt);margin-bottom:6px;word-break:break-all}
+.detail-badges{display:flex;gap:6px;flex-wrap:wrap}
+.detail-tree-scroll{flex:1;overflow-y:auto;padding:12px 14px}
+
+/* Span tree in detail — slightly more spacious */
+.detail-tree .st-row{padding:7px 8px}
+.detail-tree .sname{font-size:.82rem}
+.detail-tree .stag{font-size:.6rem}
+.detail-tree .lat-label{font-size:.63rem}
+.detail-tree .tok-sum{font-size:.64rem}
+
+.detail-right{
+  flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-width:200px;
+}
+.detail-right-scroll{flex:1;overflow-y:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+
+/* ── Drag resizer ── */
+.detail-resizer{
+  width:5px;flex-shrink:0;cursor:col-resize;
+  background:var(--card-b);position:relative;
+  display:flex;align-items:center;justify-content:center;
+  transition:background var(--t);
+}
+.detail-resizer:hover,.detail-resizer.dragging{background:var(--acc-b)}
+.detail-resizer::after{
+  content:'';position:absolute;
+  width:3px;height:36px;border-radius:99px;
+  background:var(--card-bh);transition:background var(--t);
+}
+.detail-resizer:hover::after,.detail-resizer.dragging::after{background:var(--acc)}
+
+.detail-right-header{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 20px;border-bottom:1px solid var(--card-b);background:var(--card);flex-shrink:0;
+}
+.detail-right-title{font-size:.86rem;font-weight:600;color:var(--txt);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-action-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--card);border:1px solid var(--card-b);border-radius:var(--rs);
+  color:var(--txt2);cursor:pointer;font-family:var(--font);font-size:.74rem;font-weight:500;
+  padding:5px 11px;transition:all var(--t);
+}
+.detail-action-btn:hover{border-color:var(--acc-b);color:var(--acc);background:var(--acc-bg)}
+.detail-score-btn{
+  background:var(--card);border:1px solid var(--card-b);border-radius:var(--rs);
+  cursor:pointer;font-size:.82rem;padding:4px 9px;transition:all var(--t);color:var(--txt3);
+}
+.detail-score-btn:hover{border-color:var(--card-bh);background:var(--bg)}
+.detail-score-btn.active-up{background:var(--ok-bg);border-color:var(--ok-b);color:var(--ok)}
+.detail-score-btn.active-dn{background:var(--fail-bg);border-color:var(--fail-b);color:var(--fail)}
+
+/* Annotate panel */
+.annotate-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);overflow:hidden}
+.annotate-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px;border-bottom:1px solid var(--card-b);
+}
+.annotate-title{font-size:.82rem;font-weight:600;color:var(--txt)}
+.annotate-saved{font-size:.71rem;color:var(--ok);display:none}
+.annotate-saved.show{display:inline}
+.annotate-judge-row{padding:10px 14px;border-bottom:1px solid var(--card-b)}
+.annotate-score-row{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;
+}
+.annotate-score-lbl{font-size:.78rem;color:var(--txt);width:80px;flex-shrink:0}
+.score-toggle{display:flex;gap:4px}
+.stg-btn{
+  background:var(--bg);border:1px solid var(--card-b);border-radius:var(--rs);
+  cursor:pointer;font-family:var(--font);font-size:.74rem;font-weight:500;
+  padding:4px 14px;transition:all var(--t);color:var(--txt2);
+}
+.stg-btn:hover{border-color:var(--card-bh);color:var(--txt)}
+.stg-btn.active-yes{background:var(--acc);border-color:var(--acc);color:#fff}
+.stg-btn.active-no{background:#1f2937;border-color:#1f2937;color:#fff}
+
+/* I/O sections */
+.detail-section-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);overflow:hidden}
+.detail-section-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 14px;border-bottom:1px solid var(--card-b);
+}
+.detail-section-lbl{font-size:.74rem;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em}
+.detail-section-body{padding:12px 14px;font-size:.79rem;color:var(--txt);line-height:1.65;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;font-family:var(--mono)}
+.detail-section-body.plain{font-family:var(--font);font-size:.82rem}
+.detail-section-empty{padding:12px 14px;font-size:.75rem;color:var(--txt3);font-style:italic}
+
+/* Nav buttons in topbar */
+.detail-back-row{
+  padding:8px 14px;border-bottom:1px solid var(--card-b);
+  display:flex;justify-content:flex-start;flex-shrink:0;
+}
+.back-btn{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--acc);border:1px solid var(--acc-dark);border-radius:var(--rs);
+  cursor:pointer;font-family:var(--font);font-size:.75rem;font-weight:600;
+  padding:4px 12px;color:#fff;transition:all var(--t);
+}
+.back-btn:hover{background:var(--acc-dark)}
+.nav-arrow-btn{
+  background:var(--card);border:1px solid var(--card-b);border-radius:var(--rs);
+  cursor:pointer;font-size:.77rem;padding:4px 10px;transition:all var(--t);color:var(--txt2);
+}
+.nav-arrow-btn:hover{border-color:var(--card-bh);color:var(--txt)}
+.nav-arrow-btn:disabled{opacity:.35;cursor:not-allowed}
+.nav-pos{font-size:.74rem;color:var(--txt3);font-family:var(--mono);min-width:36px;text-align:center}
+
+/* ── Agent selector ── */
+.agent-selector{display:flex;align-items:center;gap:2px;background:#f3f4f6;border:1px solid var(--card-b);border-radius:var(--rs);padding:2px}
+.agent-pill{background:transparent;border:none;border-radius:4px;cursor:pointer;font-family:var(--font);font-size:.72rem;font-weight:500;padding:4px 10px;color:var(--txt3);transition:all var(--t);white-space:nowrap}
+.agent-pill:hover{color:var(--txt)}
+.agent-pill.active{background:var(--card);color:var(--txt);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ── Session ── */
+.session-toggle-area{display:flex;align-items:center;gap:7px}
+.session-start-btn{display:inline-flex;align-items:center;gap:6px;background:transparent;border:1px dashed var(--card-b);border-radius:var(--rs);color:var(--txt3);cursor:pointer;font-family:var(--font);font-size:.74rem;font-weight:500;padding:6px 12px;transition:all var(--t)}
+.session-start-btn:hover{border-color:var(--acc-b);color:var(--acc);background:var(--acc-bg)}
+.session-active-chip{display:none;align-items:center;gap:7px;background:var(--acc-bg);border:1px solid var(--acc-b);border-radius:var(--rs);padding:5px 10px}
+.session-active-chip.visible{display:flex}
+.session-pulse{width:7px;height:7px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:blink 1.4s ease infinite}
+.session-info{display:flex;flex-direction:column;gap:1px}
+.session-turn-lbl{font-size:.72rem;font-weight:700;color:var(--acc)}
+.session-id-lbl{font-size:.6rem;color:var(--txt3);font-family:var(--mono)}
+.session-end-btn{background:transparent;border:1px solid var(--acc-b);border-radius:4px;color:var(--acc);cursor:pointer;font-family:var(--font);font-size:.68rem;font-weight:600;padding:2px 8px;transition:all var(--t)}
+.session-end-btn:hover{background:rgba(99,102,241,.15)}
+
+/* ── Sessions page ── */
+.session-list{display:flex;flex-direction:column;gap:10px}
+.sc-card{background:var(--card);border:1px solid var(--card-b);border-radius:var(--r);overflow:hidden;transition:border-color var(--t),box-shadow var(--t)}
+.sc-card:hover{border-color:var(--card-bh)}
+.sc-card.has-fail{border-color:#fca5a5}
+.sc-header{display:flex;align-items:center;gap:11px;padding:13px 16px;cursor:pointer;user-select:none}
+.sc-header:hover{background:rgba(0,0,0,.015)}
+.sc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sc-dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(22,163,74,.15)}
+.sc-dot.fail{background:var(--fail);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+.sc-meta{flex:1;min-width:0}
+.sc-name{font-weight:600;font-size:.86rem}
+.sc-sub{font-family:var(--mono);font-size:.62rem;color:var(--txt3);margin-top:2px}
+.sc-right{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.sc-ci{color:var(--txt3);font-size:.76rem;transition:transform var(--t);flex-shrink:0}
+.sc-card.open .sc-ci{transform:rotate(180deg)}
+.sc-turns{border-top:1px solid var(--card-b);max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
+.sc-card.open .sc-turns{max-height:4000px}
+.turn-row{display:flex;align-items:center;gap:11px;padding:10px 16px;border-bottom:1px solid var(--card-b);cursor:pointer;transition:background var(--t)}
+.turn-row:last-child{border-bottom:none}.turn-row:hover{background:rgba(0,0,0,.018)}
+.turn-num{font-family:var(--mono);font-size:.68rem;font-weight:700;color:var(--txt3);flex-shrink:0;width:20px;text-align:center}
+.turn-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.turn-dot.success{background:var(--ok)}.turn-dot.failed{background:var(--fail)}
+.turn-meta{flex:1;min-width:0}
+.turn-name{font-size:.81rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.turn-sub{font-size:.62rem;color:var(--txt3);font-family:var(--mono);margin-top:1px}
+.turn-badges{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.turn-spans{border-top:1px solid var(--card-b);max-height:0;overflow:hidden;transition:max-height .35s ease;background:#f9fafb}
+.turn-row.open+.turn-spans{max-height:3000px}
+.turn-spans-inner{padding:12px 16px 14px 48px}
+.sc-del-btn{background:transparent;border:1px solid var(--card-b);border-radius:4px;color:var(--txt3);cursor:pointer;font-size:.66rem;padding:2px 7px;transition:all var(--t)}
+.sc-del-btn:hover{border-color:var(--fail-b);color:var(--fail);background:var(--fail-bg)}
+
+@media(max-width:680px){:root{--sidebar-w:0px}.sidebar{display:none}.main{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-row">
+      <div class="logo-icon">🔭</div>
+      <div>
+        <div class="logo-text">Trace AI</div>
+        <div class="logo-sub">Agent Observability</div>
+      </div>
+    </div>
+    <div class="live-chip">
+      <div class="live-dot"></div>
+      <span class="live-label">LIVE</span>
+      <span class="live-cd">· <span id="cd">2</span>s</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-lbl">Analytics</div>
+    <button class="nav-item active" id="nav-overview" onclick="showPage('overview')">
+      <span class="nav-icon">⊞</span>Overview
+    </button>
+    <button class="nav-item" id="nav-traces" onclick="showPage('traces')">
+      <span class="nav-icon">📊</span>Traces
+    </button>
+    <button class="nav-item" id="nav-sessions" onclick="showPage('sessions')">
+      <span class="nav-icon">💬</span>Sessions
+      <span class="nav-badge" id="sessions-badge" style="display:none">0</span>
+    </button>
+    <div class="nav-section-lbl">Evaluation</div>
+    <button class="nav-item" id="nav-insights" onclick="showPage('insights')">
+      <span class="nav-icon">🔍</span>Insights
+      <span class="nav-badge" id="insights-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" id="nav-datasets" onclick="showPage('datasets')">
+      <span class="nav-icon">📂</span>Datasets
+    </button>
+    <button class="nav-item" id="nav-evals" onclick="showPage('evals')">
+      <span class="nav-icon">⚖️</span>Evals
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="stat-row"><span class="stat-lbl">Traces</span><span class="stat-val acc" id="s-total">0</span></div>
+    <div class="stat-row"><span class="stat-lbl">Success</span><span class="stat-val ok" id="s-ok">—</span></div>
+    <div class="stat-row"><span class="stat-lbl">Avg Latency</span><span class="stat-val" id="s-lat">—</span></div>
+    <div class="stat-row"><span class="stat-lbl">Total Cost</span><span class="stat-val" id="s-cost">$0.00</span></div>
+  </div>
+</aside>
+
+<!-- ── Main ── -->
+<main class="main">
+
+<!-- Overview -->
+<div class="page active" id="page-overview">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Overview</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="tb-icon-btn" onclick="exportCSV()" title="Export CSV">⬇</button>
+    </div>
+  </div>
+  <div class="overview-tabs">
+    <button class="ov-tab active">Traces</button>
+    <button class="ov-tab" onclick="showPage('sessions')">Sessions</button>
+  </div>
+  <div class="overview-body">
+    <div class="overview-top-card">
+      <div class="chart-title">Trace Count</div>
+      <div class="chart-value" id="ov-total">0</div>
+      <div class="bar-chart bar-chart-purple" id="ov-trace-chart"></div>
+    </div>
+    <div class="overview-bottom">
+      <div class="mini-chart-card">
+        <div class="chart-title">Cost</div>
+        <div class="chart-value" id="ov-cost">$0.00</div>
+        <div class="mini-bar-chart bar-chart-pink" id="ov-cost-chart"></div>
+      </div>
+      <div class="mini-chart-card">
+        <div class="chart-title">Latency</div>
+        <div class="chart-value" id="ov-latency">—</div>
+        <div class="mini-bar-chart bar-chart-blue" id="ov-lat-chart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Traces -->
+<div class="page" id="page-traces">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Traces</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="agent-selector">
+        <button class="agent-pill active" id="agent-default" onclick="setAgent('default')">🤖 Demo</button>
+        <button class="agent-pill" id="agent-langgraph" onclick="setAgent('langgraph')">⚡ LangGraph</button>
+      </div>
+      <div class="session-toggle-area">
+        <button class="session-start-btn" id="session-start-btn" onclick="startSession()">💬 Session</button>
+        <div class="session-active-chip" id="session-active-chip">
+          <div class="session-pulse"></div>
+          <div class="session-info">
+            <span class="session-turn-lbl" id="session-turn-lbl">Turn 1</span>
+            <span class="session-id-lbl" id="session-id-lbl"></span>
+          </div>
+          <button class="session-end-btn" onclick="endSession()">End</button>
+        </div>
+      </div>
+      <input id="run-query" class="run-input" type="text" value="What is LangChain?" placeholder="Ask the agent…"/>
+      <button id="run-btn" class="btn btn-primary" onclick="runAgent()">
+        <div class="sp-anim"></div><span class="btn-lbl">▶ Run</span>
+      </button>
+      <button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="search-row">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="search-input" class="search-input" type="text" placeholder="Search traces…" oninput="applySearch()"/>
+      </div>
+      <div class="filter-pills">
+        <button class="pill on" id="f-all"     onclick="setFilter('all')">All</button>
+        <button class="pill"    id="f-success" onclick="setFilter('success')">✓ Success</button>
+        <button class="pill"    id="f-failed"  onclick="setFilter('failed')">✕ Failed</button>
+        <button class="pill"    id="f-running" onclick="setFilter('running')">⟳ Running</button>
+      </div>
+      <span class="result-count" id="result-count"></span>
+    </div>
+
+    <!-- Table -->
+    <div class="trace-table" id="trace-table-wrap">
+      <div class="trace-table-header">
+        <span class="th">TimeStamp</span>
+        <span class="th">Input</span>
+        <span class="th">Output</span>
+        <span class="th">Model</span>
+        <span class="th">Latency</span>
+        <span class="th">Cost</span>
+        <span class="th">Success Rate</span>
+      </div>
+      <div id="traces"></div>
+    </div>
+
+    <div id="empty" style="display:none">
+      <div class="ei">📡</div>
+      <h2>No traces yet</h2>
+      <p>Click <strong>▶ Run</strong> to fire the agent and watch traces appear.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Sessions -->
+<div class="page" id="page-sessions">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Sessions</span>
+    </div>
+  </div>
+  <div class="page-header">
+    <div style="flex:1">
+      <div class="page-title">Sessions</div>
+      <div class="page-sub" id="sessions-page-sub">Group traces by conversation</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="session-list" id="session-list"></div>
+    <div class="eval-empty" id="sessions-empty">No sessions yet. Click <strong>💬 Session</strong> on the Traces page and run a few queries.</div>
+  </div>
+</div>
+
+<!-- Insights -->
+<div class="page" id="page-insights">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Insights</span>
+    </div>
+    <div class="topbar-actions">
+      <span id="ad-badge" class="badge b-neu">Analyzing…</span>
+    </div>
+  </div>
+  <div class="page-header">
+    <div style="flex:1">
+      <div class="page-title">Insights</div>
+      <div class="page-sub" id="ad-analyzed"></div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="summary-grid" id="insights-summary"></div>
+    <div id="ad-body"><div class="ad-waiting">Run a few traces to start detecting patterns…</div></div>
+  </div>
+</div>
+
+<!-- Datasets -->
+<div class="page" id="page-datasets">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Datasets</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary" onclick="showNewDatasetForm()">+ New Dataset</button>
+    </div>
+  </div>
+  <div class="page-header">
+    <div style="flex:1">
+      <div class="page-title">Datasets</div>
+      <div class="page-sub" id="ds-page-sub">Build eval datasets from your traces</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="ds-form-card" id="ds-form-card">
+      <div class="ds-form-title">Create Dataset</div>
+      <div class="ds-form-row">
+        <input id="ds-name-input" class="ds-form-input" placeholder="Dataset name…"/>
+        <input id="ds-desc-input" class="ds-form-input" placeholder="Description (optional)…"/>
+      </div>
+      <div class="ds-form-btns">
+        <button class="btn btn-primary" onclick="createDataset()">Create</button>
+        <button class="btn btn-secondary" onclick="hideNewDatasetForm()">Cancel</button>
+      </div>
+    </div>
+    <div class="datasets-grid" id="ds-grid"></div>
+  </div>
+</div>
+
+<!-- Evals -->
+<div class="page" id="page-evals">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur">Evaluations</span>
+    </div>
+  </div>
+  <div class="page-header">
+    <div style="flex:1">
+      <div class="page-title">Evaluations</div>
+      <div class="page-sub">LLM-as-judge groundedness scores</div>
+    </div>
+  </div>
+  <div class="page-body">
+    <div class="summary-grid" id="evals-summary"></div>
+    <div class="eval-list" id="eval-list"></div>
+    <div class="eval-empty" id="eval-empty">No evaluations yet. Click ⚖ Judge on any trace to score it.</div>
+  </div>
+</div>
+
+<!-- Trace Detail -->
+<div class="page" id="page-trace-detail">
+  <div class="topbar">
+    <div class="breadcrumb">
+      <span class="bc-home" onclick="showPage('overview')">Dashboard</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-home" onclick="closeTrace()">Traces</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-cur" id="detail-breadcrumb-name">Trace</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="nav-arrow-btn" id="detail-prev-btn" onclick="navigateTrace(-1)">←</button>
+      <span class="nav-pos" id="detail-nav-pos">1 / 1</span>
+      <button class="nav-arrow-btn" id="detail-next-btn" onclick="navigateTrace(1)">→</button>
+    </div>
+  </div>
+  <div class="detail-layout">
+    <!-- Left: span tree -->
+    <div class="detail-left">
+      <div class="detail-back-row">
+        <button class="back-btn" onclick="closeTrace()">← Back to Traces</button>
+      </div>
+      <div class="detail-left-top">
+        <div class="detail-trace-title" id="detail-trace-title">—</div>
+        <div class="detail-badges" id="detail-badges"></div>
+      </div>
+      <div class="detail-tree-scroll">
+        <div class="detail-tree" id="detail-span-tree"></div>
+      </div>
+    </div>
+    <!-- Drag handle -->
+    <div class="detail-resizer" id="detail-resizer"></div>
+    <!-- Right: I/O + annotation -->
+    <div class="detail-right">
+      <div class="detail-right-header">
+        <span class="detail-right-title" id="detail-right-title">—</span>
+        <button class="detail-action-btn" id="detail-ds-btn" onclick="openDetailDatasetPicker()">+ Add to dataset</button>
+        <button class="detail-score-btn" id="detail-btn-up" onclick="scoreDetailTrace(1)">👍</button>
+        <button class="detail-score-btn" id="detail-btn-dn" onclick="scoreDetailTrace(-1)">👎</button>
+      </div>
+      <div class="detail-right-scroll">
+        <!-- Annotate -->
+        <div class="annotate-card">
+          <div class="annotate-header">
+            <span class="annotate-title">Annotate</span>
+            <span class="annotate-saved" id="detail-score-saved">✓ Score saved</span>
+          </div>
+          <div class="annotate-judge-row" id="detail-judge-area"></div>
+        </div>
+        <!-- Input -->
+        <div class="detail-section-card">
+          <div class="detail-section-head">
+            <span class="detail-section-lbl">Input</span>
+          </div>
+          <div id="detail-input-body" class="detail-section-body plain"></div>
+        </div>
+        <!-- Output -->
+        <div class="detail-section-card">
+          <div class="detail-section-head">
+            <span class="detail-section-lbl">Output</span>
+          </div>
+          <div id="detail-output-body" class="detail-section-body plain"></div>
+        </div>
+        <!-- Metadata -->
+        <div class="detail-section-card" id="detail-meta-card">
+          <div class="detail-section-head">
+            <span class="detail-section-lbl">Metadata</span>
+          </div>
+          <div id="detail-meta-body" class="detail-section-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- Dataset picker -->
+<div id="dataset-picker">
+  <div class="dp-title">Save to Dataset</div>
+  <div class="dp-list" id="dp-list"></div>
+  <div class="dp-new">
+    <input id="dp-new-name" class="dp-input" placeholder="New dataset…" onkeydown="if(event.key==='Enter') createDatasetFromPicker()"/>
+    <button class="dp-create-btn" onclick="createDatasetFromPicker()">+ Create</button>
+  </div>
+</div>
+
+<script>
+// ── DEPLOYMENT CONFIG ───────────────────────────────────────────────────────
+// ⚠️  BEFORE DEPLOYING TO NETLIFY: replace the localhost URL below with your Railway URL.
+// Local dev:    const API = 'http://127.0.0.1:8000';
+// Production:   const API = 'https://YOUR-APP.up.railway.app';
+const API = window.__TRACEAI_API__ || 'http://127.0.0.1:8000';
+// ────────────────────────────────────────────────────────────────────────────
+let allTraces=[], activeFilter='all', searchQ='', expanded=new Set(), countdown=2;
+let allScores={}, allJudgments={}, allDatasets=[], datasetMembership={}, pickerTraceId=null;
+let currentAgentType='default';
+
+// ── Pages ──────────────────────────────────────────────
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const nav=document.getElementById('nav-'+name);
+  if(nav) nav.classList.add('active');
+  if(name==='evals') renderEvalsPage();
+  if(name==='datasets') renderDatasetsPage();
+  if(name==='sessions') loadSessions();
+  if(name==='overview') renderOverview();
+  if(name==='insights') loadInsights();
+}
+
+// ── Data loading ──────────────────────────────────────
+async function loadTraces(){
+  try{ const r=await fetch(API+'/traces'); if(r.ok) allTraces=await r.json(); }catch(_){}
+  updateSidebarStats(); render(); renderOverview();
+}
+async function loadScores(){
+  try{ const r=await fetch(API+'/scores'); if(r.ok) allScores=await r.json(); }catch(_){}
+}
+async function loadJudgments(){
+  try{ const r=await fetch(API+'/judgments'); if(r.ok) allJudgments=await r.json(); }catch(_){}
+}
+async function loadDatasets(){
+  try{
+    const [dr,mr]=await Promise.all([fetch(API+'/datasets'),fetch(API+'/datasets/memberships')]);
+    if(dr.ok) allDatasets=await dr.json();
+    if(mr.ok) datasetMembership=await mr.json();
+  }catch(_){}
+  renderDatasetsPage();
+}
+
+// ── Sidebar stats ─────────────────────────────────────
+function updateSidebarStats(){
+  const ok=allTraces.filter(t=>t.status==='success').length;
+  const lats=allTraces.filter(t=>t.latency!=null).map(t=>t.latency);
+  const avg=lats.length?(lats.reduce((a,b)=>a+b,0)/lats.length).toFixed(2)+'s':'—';
+  const cost=allTraces.reduce((a,t)=>a+(t.total_cost_usd||0),0);
+  const pct=allTraces.length?Math.round(ok/allTraces.length*100)+'%':'—';
+  document.getElementById('s-total').textContent=allTraces.length;
+  document.getElementById('s-ok').textContent=pct;
+  document.getElementById('s-lat').textContent=avg;
+  document.getElementById('s-cost').textContent='$'+cost.toFixed(4);
+}
+
+// ── Overview charts ───────────────────────────────────
+function renderOverview(){
+  const total=allTraces.length;
+  const cost=allTraces.reduce((a,t)=>a+(t.total_cost_usd||0),0);
+  const lats=allTraces.filter(t=>t.latency!=null).map(t=>t.latency);
+  const avgLat=lats.length?(lats.reduce((a,b)=>a+b,0)/lats.length).toFixed(2)+'s':'—';
+
+  const el=document.getElementById('ov-total');
+  if(el) el.textContent=total.toLocaleString();
+  const ec=document.getElementById('ov-cost');
+  if(ec) ec.textContent='$'+cost.toFixed(4);
+  const el2=document.getElementById('ov-latency');
+  if(el2) el2.textContent=avgLat;
+
+  // Build last 14 days
+  const days=14;
+  const now=Date.now();
+  const buckets=Array.from({length:days},(_,i)=>{
+    const d=new Date(now-(days-1-i)*86400000);
+    return {label:d.toLocaleDateString('en',{month:'short',day:'numeric'}),count:0,cost:0,lat:[],};
+  });
+  allTraces.forEach(t=>{
+    if(!t.start_time) return;
+    const age=Math.floor((now/1000-t.start_time)/86400);
+    if(age>=days) return;
+    const idx=days-1-age;
+    if(idx<0||idx>=days) return;
+    buckets[idx].count++;
+    buckets[idx].cost+=t.total_cost_usd||0;
+    if(t.latency!=null) buckets[idx].lat.push(t.latency);
+  });
+
+  renderBarChart('ov-trace-chart', buckets.map(b=>b.count), buckets.map(b=>b.label));
+  renderBarChart('ov-cost-chart',  buckets.map(b=>b.cost),  buckets.map(b=>b.label));
+  renderBarChart('ov-lat-chart',   buckets.map(b=>b.lat.length?(b.lat.reduce((a,c)=>a+c,0)/b.lat.length):0), buckets.map(b=>b.label));
+}
+
+function renderBarChart(id, values, labels){
+  const el=document.getElementById(id); if(!el) return;
+  const max=Math.max(...values,0.001);
+  const chartH=el.classList.contains('mini-bar-chart')?52:72;
+  el.innerHTML=values.map((v,i)=>{
+    const h=Math.max(Math.round((v/max)*chartH),2);
+    return `<div class="bar-wrap">
+      <div class="bar" style="height:${h}px" title="${labels[i]}: ${typeof v==='number'?v.toFixed(2):v}"></div>
+      <span class="bar-lbl">${labels[i].split(' ')[1]||''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Filter / search ───────────────────────────────────
+function setFilter(f){
+  activeFilter=f;
+  ['all','success','failed','running'].forEach(id=>document.getElementById('f-'+id).classList.toggle('on',id===f));
+  render();
+}
+function applySearch(){ searchQ=document.getElementById('search-input').value.toLowerCase(); render(); }
+function matchesSearch(trace,q){
+  if(!q) return true;
+  const spans=trace.spans||[];
+  const blob=[trace.name,trace.status,...spans.map(s=>[s.name,s.type,s.status,JSON.stringify(s.metadata)].join(' '))].join(' ').toLowerCase();
+  return blob.includes(q);
+}
+function visibleTraces(){
+  return [...allTraces].reverse()
+    .filter(t=>activeFilter==='all'||t.status===activeFilter)
+    .filter(t=>matchesSearch(t,searchQ));
+}
+
+// ── Render trace table ────────────────────────────────
+function render(){
+  const container=document.getElementById('traces');
+  const empty=document.getElementById('empty');
+  const wrap=document.getElementById('trace-table-wrap');
+  const list=visibleTraces();
+  document.getElementById('result-count').textContent=list.length?list.length+' trace'+(list.length!==1?'s':''):'';
+  if(!list.length){ container.innerHTML=''; wrap.style.display='none'; empty.style.display='flex'; return; }
+  wrap.style.display='';empty.style.display='none';
+  [...container.querySelectorAll('.trace-row-wrap')].forEach(el=>{ if(!list.find(t=>t.trace_id===el.dataset.id)) el.remove(); });
+  list.forEach((trace,idx)=>{
+    if(container.querySelector(`[data-id="${trace.trace_id}"]`)) return;
+    const row=buildRow(trace);
+    const ref=container.children[idx];
+    if(ref) container.insertBefore(row,ref); else container.appendChild(row);
+  });
+}
+
+function buildRow(trace){
+  const wrap=document.createElement('div');
+  const spans=trace.spans||legacySpans(trace.steps||[]);
+  const hasFail=trace.status==='failed';
+  wrap.className='trace-row-wrap';
+  wrap.dataset.id=trace.trace_id;
+
+  const ts=trace.start_time?new Date(trace.start_time*1000).toLocaleString('en',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+  const agentStartSpan=spans.find(s=>s.type==='agent_start');
+  const inputText=agentStartSpan?.metadata?.query||agentStartSpan?.metadata?.input_preview||trace.name||'—';
+  const responseSpan=spans.find(s=>s.type==='agent_response');
+  const outputText=responseSpan?.metadata?.response_preview||'—';
+  const llmSpan=spans.find(s=>s.type==='llm_call');
+  const modelName=llmSpan?.metadata?.model||'—';
+  const latency=trace.latency!=null?trace.latency+'s':'—';
+  const cost=trace.total_cost_usd?'$'+trace.total_cost_usd.toFixed(4):'—';
+  const sTotal=trace.spans_total??spans.length;
+  const sOk=trace.spans_success??spans.filter(s=>s.status==='success').length;
+  const rate=sTotal>0?Math.round(sOk/sTotal*100):null;
+  const rateClass=rate===null?'na':rate>=80?'ok':rate>=50?'warn':'bad';
+  const rateText=rate===null?'— %':rate+'%';
+
+  wrap.innerHTML=`
+    <div class="trace-row${hasFail?' fail-row':''}" onclick="openTrace('${trace.trace_id}')">
+      <span class="tr-ts">${ts}</span>
+      <span class="tr-text" title="${esc(inputText)}">${esc(inputText.slice(0,45))}${inputText.length>45?'…':''}</span>
+      <span class="tr-text ${outputText==='—'?'muted':''}" title="${esc(outputText)}">${esc(outputText.slice(0,45))}${outputText.length>45?'…':''}</span>
+      <span class="tr-model"><span class="model-icon">✦</span>${esc(modelName.split('/').pop().slice(0,12))}</span>
+      <span class="tr-num">${latency}</span>
+      <span class="tr-cost">${cost}</span>
+      <span class="tr-rate ${rateClass}">${rateText}</span>
+    </div>`;
+  return wrap;
+}
+
+// ── Score helpers ─────────────────────────────────────
+function renderScoreBtns(id){
+  const s=allScores[id];
+  return `<button class="score-btn ${s&&s.score===1?'s-up':''}" onclick="scoreTrace('${id}',1)">👍</button>`
+        +`<button class="score-btn ${s&&s.score===-1?'s-dn':''}" onclick="scoreTrace('${id}',-1)">👎</button>`;
+}
+async function scoreTrace(id,score){
+  const curr=allScores[id];
+  const n=(curr&&curr.score===score)?0:score;
+  if(n===0) delete allScores[id]; else allScores[id]={score:n};
+  try{ await fetch(API+'/score/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({score:n})}); }catch(_){}
+  const el=document.getElementById('score-'+id);
+  if(el) el.innerHTML=renderScoreBtns(id);
+}
+
+// ── Judge helpers ─────────────────────────────────────
+function renderJudgeArea(id){
+  const j=allJudgments[id];
+  if(!j) return `<button class="judge-btn" onclick="judgeTrace('${id}')">⚖ Judge</button>`;
+  const icon={grounded:'✓',partial:'△',ungrounded:'✕'}[j.verdict]||'?';
+  return `<span class="judge-verdict ${j.verdict}">${icon} ${j.verdict}</span>`
+        +`<span class="judge-score">${(j.score*100).toFixed(0)}%</span>`
+        +`<span class="judge-reasoning">${esc(j.reasoning||'')}</span>`
+        +`<button class="judge-btn" onclick="judgeTrace('${id}')" title="Re-run">↻</button>`;
+}
+async function judgeTrace(id){
+  const el=document.getElementById('judge-'+id);
+  if(el) el.innerHTML='<span class="judge-loading">⏳ Judging…</span>';
+  try{
+    const r=await fetch(API+'/judge/'+id,{method:'POST'});
+    const data=await r.json();
+    if(data.error){ if(el) el.innerHTML=`<span class="judge-error">⚠ ${esc(data.error)}</span>`; return; }
+    allJudgments[id]=data;
+    if(el) el.innerHTML=renderJudgeArea(id);
+    renderEvalsPage();
+  }catch(e){ if(el) el.innerHTML='<span class="judge-error">⚠ Backend unreachable</span>'; }
+}
+
+// ── Span tree ─────────────────────────────────────────
+function buildTree(spans,parentId,maxDur){
+  const children=spans.filter(s=>(s.parent_span_id??null)===parentId);
+  if(!children.length) return '';
+  return children.map(span=>{
+    const st=span.status||'success';
+    const isFail=st==='failed';
+    const isPhase=span.type==='phase';
+    const phFail=isPhase&&spans.filter(s=>s.parent_span_id===span.span_id).some(s=>s.status==='failed');
+    const dur=span.duration_ms??0;
+    const meta=span.metadata||{};
+    const retries=span.retry_count||meta.retry_attempt||0;
+    const hasKids=spans.some(s=>s.parent_span_id===span.span_id);
+    const isTimeout=(meta.error||'').toLowerCase().includes('timeout')||(meta.retry_reason||'').toLowerCase().includes('timeout');
+    const pct=maxDur>0?Math.min((dur/maxDur)*100,100):0;
+    const latClass=dur>2000?'bad':dur>500?'warn':'ok';
+    let tokHtml='';
+    if(span.type==='llm_call'&&(meta.input_tokens||0)>0){
+      tokHtml=`<div class="tok-sum">
+        <span><span class="tk">in</span> <span class="tv">${(meta.input_tokens||0).toLocaleString()}</span></span>
+        <span><span class="tk">out</span> <span class="tv">${(meta.output_tokens||0).toLocaleString()}</span></span>
+        ${meta.cached_tokens>0?`<span><span class="tk">cached</span> <span class="tv">${meta.cached_tokens}</span></span>`:''}
+        <span><span class="tk">model</span> <span class="tv">${meta.model||''}</span></span>
+        ${meta.cost_usd>0?`<span class="tc2">$${meta.cost_usd.toFixed(5)}</span>`:''}
+      </div>`;
+    }
+    let errHtml='';
+    if(isFail&&meta.error) errHtml=`<div class="err-callout"><span>⚠</span><span>${esc(meta.error)}</span></div>`;
+    let responseHtml='';
+    if(span.type==='agent_response'&&meta.response_preview){
+      responseHtml=`<div class="response-bubble"><div class="response-label">Agent Response</div><div class="response-text">${esc(meta.response_preview)}</div></div>`;
+    }
+    const skip=new Set(['input_tokens','output_tokens','cached_tokens','total_tokens','cost_usd','pricing_note','model','retry_attempt','retry_reason','retry_wait_ms','error','response_preview']);
+    const clean=Object.fromEntries(Object.entries(meta).filter(([k])=>!skip.has(k)));
+    const metaHtml=Object.keys(clean).length?`<pre class="smeta">${highlight(clean)}</pre>`:'';
+    const ICONS={agent_start:'▶',phase:'◇',tool_call:'🔧',llm_call:'✦',agent_response:'★',failure:'✕'};
+    const icon=ICONS[span.type]||'●';
+    const rowClass=['st-row',isFail?'is-fail':'',isPhase?(phFail?'is-phase fail-phase':'is-phase'):''].filter(Boolean).join(' ');
+    return `<div class="st-node">
+      <div class="${rowClass}">
+        <div class="sdot ${st}"></div>
+        <div class="si ${span.type}">${icon}</div>
+        <div class="sb">
+          <div class="srow">
+            <span class="stag ${span.type}">${span.type.replace('_',' ')}</span>
+            <span class="sname">${esc(span.name)}</span>
+            ${retries>0?`<span class="rb">↺ ${retries} retr${retries>1?'ies':'y'}</span>`:''}
+            ${isTimeout?`<span class="tb-badge">⏱ timeout</span>`:''}
+          </div>
+          ${dur>0?`<div class="lat-wrap"><div class="lat-bar-bg"><div class="lat-bar-fill ${latClass}" style="width:${pct}%"></div></div><span class="lat-label">${dur>=1000?(dur/1000).toFixed(2)+'s':dur+'ms'}</span></div>`:''}
+          ${tokHtml}${errHtml}${responseHtml}${metaHtml}
+        </div>
+      </div>
+      ${hasKids?`<div class="st-children">${buildTree(spans,span.span_id,maxDur)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── Insights ──────────────────────────────────────────
+async function loadInsights(){
+  try{
+    const r=await fetch(API+'/insights');
+    if(!r.ok) throw 0;
+    renderInsights(await r.json());
+  }catch(_){ document.getElementById('ad-body').innerHTML='<div class="ad-waiting">Backend not reachable…</div>'; }
+}
+function renderInsights(data){
+  const body=document.getElementById('ad-body');
+  const badge=document.getElementById('ad-badge');
+  const analyzed=document.getElementById('ad-analyzed');
+  const tracesN=data.traces_analyzed||0;
+  const ts=data.analyzed_at?new Date(data.analyzed_at*1000).toLocaleTimeString():'';
+  analyzed.textContent=`${tracesN} trace${tracesN!==1?'s':''} · ${ts}`;
+  const nb=document.getElementById('insights-badge');
+  if(data.status==='insufficient_data'){
+    badge.className='badge b-neu'; badge.textContent='Need more data';
+    body.innerHTML=`<div class="ad-waiting">${esc(data.message)}</div>`;
+    if(nb) nb.style.display='none'; return;
+  }
+  const insights=data.insights||[];
+  const critical=data.critical_count||0;
+  const warnings=data.warning_count||0;
+  const summary=document.getElementById('insights-summary');
+  if(summary) summary.innerHTML=`
+    <div class="sc"><div class="sc-lbl">Critical</div><div class="sc-val crit">${critical}</div></div>
+    <div class="sc"><div class="sc-lbl">Warnings</div><div class="sc-val warn-c">${warnings}</div></div>
+    <div class="sc"><div class="sc-lbl">Analyzed</div><div class="sc-val dim">${tracesN}</div></div>
+    <div class="sc"><div class="sc-lbl">Status</div><div class="sc-val ${insights.length===0?'ok-c':'warn-c'}">${insights.length===0?'Clean':'Issues'}</div></div>`;
+  if(nb){ if(critical>0){nb.style.display='inline';nb.textContent=critical;}else nb.style.display='none'; }
+  if(!insights.length){
+    badge.className='badge b-ok'; badge.textContent='✓ All clear';
+    body.innerHTML=`<div class="ad-clean"><span>✅</span><span>No anomalies across ${tracesN} traces.</span></div>`; return;
+  }
+  badge.className=critical>0?'badge b-fail':'badge b-run';
+  badge.textContent=critical>0?`${critical} critical`:`${warnings} warnings`;
+  const ICONS={latency_spike:'⏱',error_cluster:'🔴',cost_anomaly:'💸',output_drift:'📉',retry_storm:'🔁',failure_rate_spike:'🚨'};
+  body.innerHTML=`<div class="insight-list">${insights.map(ins=>{
+    const ev=ins.evidence||{};
+    const chips=Object.entries(ev).map(([k,v])=>`<span class="ev-chip">${esc(k)}: ${esc(v)}</span>`).join('');
+    const rec=ins.recommendation?`<div class="insight-rec">💡 ${esc(ins.recommendation)}</div>`:'';
+    return `<div class="insight-card ${ins.severity}">
+      <div class="insight-row">
+        <span class="insight-icon">${ICONS[ins.type]||'⚠'}</span>
+        <div class="insight-content">
+          <div class="insight-title">${esc(ins.title)}</div>
+          <div class="insight-msg">${esc(ins.message)}</div>
+          <div class="insight-evidence">${chips}</div>${rec}
+        </div>
+        <span class="insight-type-badge">${esc(ins.type)}</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── Datasets ──────────────────────────────────────────
+function renderDatasetsPage(){
+  const grid=document.getElementById('ds-grid'); if(!grid) return;
+  const sub=document.getElementById('ds-page-sub');
+  if(sub) sub.textContent=allDatasets.length+' dataset'+(allDatasets.length!==1?'s':'')+' · Build eval datasets from your traces';
+  if(!allDatasets.length){
+    grid.innerHTML=`<div class="empty-state"><div class="ei">📂</div><h3>No datasets yet</h3><p>Click <strong>+ New Dataset</strong>, then save traces with the 📂 button.</p></div>`; return;
+  }
+  grid.innerHTML=allDatasets.map(ds=>`
+    <div class="ds-card">
+      <div class="ds-card-header">
+        <div class="ds-card-icon">📂</div>
+        <div><div class="ds-card-name">${esc(ds.name)}</div>${ds.description?`<div class="ds-card-desc">${esc(ds.description)}</div>`:''}</div>
+      </div>
+      <div class="ds-card-meta"><span class="ds-card-count">${ds.trace_count}</span> traces</div>
+      <div class="ds-card-btns">
+        <button class="ds-card-btn" onclick="exportDataset('${ds.dataset_id}','${esc(ds.name)}')">⬇ Export</button>
+        <button class="ds-card-btn del" onclick="deleteDataset('${ds.dataset_id}')">✕ Delete</button>
+      </div>
+    </div>`).join('');
+}
+function showNewDatasetForm(){ document.getElementById('ds-form-card').classList.add('visible'); document.getElementById('ds-name-input').focus(); }
+function hideNewDatasetForm(){ document.getElementById('ds-form-card').classList.remove('visible'); document.getElementById('ds-name-input').value=''; document.getElementById('ds-desc-input').value=''; }
+async function createDataset(){
+  const name=document.getElementById('ds-name-input').value.trim(); if(!name) return;
+  const desc=document.getElementById('ds-desc-input').value.trim();
+  try{
+    const r=await fetch(API+'/datasets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description:desc})});
+    if(r.ok){ const ds=await r.json(); allDatasets.unshift({...ds,trace_count:0}); hideNewDatasetForm(); renderDatasetsPage(); }
+  }catch(_){}
+}
+async function deleteDataset(id){
+  if(!confirm('Delete this dataset? Traces are not deleted.')) return;
+  try{ await fetch(API+'/datasets/'+id,{method:'DELETE'}); allDatasets=allDatasets.filter(d=>d.dataset_id!==id); for(const t in datasetMembership) datasetMembership[t]=datasetMembership[t].filter(x=>x!==id); renderDatasetsPage(); }catch(_){}
+}
+async function exportDataset(id,name){
+  try{
+    const r=await fetch(API+'/datasets/'+id+'/export'); if(!r.ok) return;
+    const data=await r.json();
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(name||id)+'.json'; a.click(); URL.revokeObjectURL(a.href);
+  }catch(_){}
+}
+
+// ── Evals ─────────────────────────────────────────────
+function renderEvalsPage(){
+  const list=document.getElementById('eval-list');
+  const summary=document.getElementById('evals-summary');
+  const emptyEl=document.getElementById('eval-empty');
+  if(!list) return;
+  const entries=Object.entries(allJudgments);
+  if(!entries.length){ list.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; if(summary) summary.innerHTML=''; return; }
+  if(emptyEl) emptyEl.style.display='none';
+  const scores=entries.map(([,j])=>j.score);
+  const avg=scores.reduce((a,b)=>a+b,0)/scores.length;
+  const grounded=entries.filter(([,j])=>j.verdict==='grounded').length;
+  const partial=entries.filter(([,j])=>j.verdict==='partial').length;
+  const ungrounded=entries.filter(([,j])=>j.verdict==='ungrounded').length;
+  if(summary) summary.innerHTML=`
+    <div class="sc"><div class="sc-lbl">Avg Score</div><div class="sc-val ${avg>=.7?'ok-c':avg>=.4?'warn-c':'crit'}">${(avg*100).toFixed(0)}%</div></div>
+    <div class="sc"><div class="sc-lbl">Grounded</div><div class="sc-val ok-c">${grounded}</div></div>
+    <div class="sc"><div class="sc-lbl">Partial</div><div class="sc-val warn-c">${partial}</div></div>
+    <div class="sc"><div class="sc-lbl">Ungrounded</div><div class="sc-val crit">${ungrounded}</div></div>`;
+  list.innerHTML=entries.map(([tid,j])=>{
+    const trace=allTraces.find(t=>t.trace_id===tid);
+    const name=trace?trace.name:tid;
+    const icon={grounded:'✓',partial:'△',ungrounded:'✕'}[j.verdict]||'?';
+    return `<div class="eval-row">
+      <span class="eval-verdict ${j.verdict}">${icon} ${j.verdict}</span>
+      <div class="eval-name"><div class="eval-trace-name">${esc(name)}</div><div class="eval-trace-id">${tid.slice(0,22)}…</div></div>
+      <span class="eval-score">${(j.score*100).toFixed(0)}%</span>
+      <span class="eval-reasoning">${esc(j.reasoning||'')}</span>
+      <span class="eval-model">${j.judge_model||j.model||''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Dataset picker ────────────────────────────────────
+function openDatasetPicker(id,btn){
+  pickerTraceId=id;
+  const picker=document.getElementById('dataset-picker');
+  const rect=btn.getBoundingClientRect();
+  picker.style.top=(rect.bottom+window.scrollY+4)+'px';
+  picker.style.left=Math.max(4,Math.min(rect.right-240,window.innerWidth-244))+'px';
+  renderDatasetPicker(id);
+  picker.style.display='block';
+}
+function renderDatasetPicker(id){
+  const myDs=datasetMembership[id]||[];
+  const el=document.getElementById('dp-list'); if(!el) return;
+  if(!allDatasets.length){ el.innerHTML='<div class="dp-empty">No datasets yet</div>'; return; }
+  el.innerHTML=allDatasets.map(ds=>`<label class="dp-row">
+    <input type="checkbox" ${myDs.includes(ds.dataset_id)?'checked':''} onchange="toggleDatasetMember('${ds.dataset_id}','${id}',this.checked)">
+    <span class="dp-row-name">${esc(ds.name)}</span>
+    <span class="dp-row-count">${ds.trace_count}</span>
+  </label>`).join('');
+}
+async function toggleDatasetMember(dsId,tid,add){
+  try{
+    if(add){
+      await fetch(`${API}/datasets/${dsId}/traces`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trace_id:tid})});
+      if(!datasetMembership[tid]) datasetMembership[tid]=[];
+      if(!datasetMembership[tid].includes(dsId)) datasetMembership[tid].push(dsId);
+      const ds=allDatasets.find(d=>d.dataset_id===dsId); if(ds) ds.trace_count++;
+    }else{
+      await fetch(`${API}/datasets/${dsId}/traces/${tid}`,{method:'DELETE'});
+      if(datasetMembership[tid]) datasetMembership[tid]=datasetMembership[tid].filter(x=>x!==dsId);
+      const ds=allDatasets.find(d=>d.dataset_id===dsId); if(ds&&ds.trace_count>0) ds.trace_count--;
+    }
+    renderDatasetsPage();
+  }catch(_){}
+}
+async function createDatasetFromPicker(){
+  const inp=document.getElementById('dp-new-name');
+  const name=inp.value.trim(); if(!name) return;
+  try{
+    const r=await fetch(API+'/datasets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,description:''})});
+    if(r.ok){ const ds=await r.json(); allDatasets.unshift({...ds,trace_count:0}); inp.value=''; renderDatasetsPage(); if(pickerTraceId) renderDatasetPicker(pickerTraceId); }
+  }catch(_){}
+}
+document.addEventListener('click',e=>{
+  const p=document.getElementById('dataset-picker');
+  if(p&&p.style.display==='block'&&!p.contains(e.target)&&!e.target.classList.contains('ds-icon-btn')) p.style.display='none';
+});
+
+// ── Session mode ──────────────────────────────────────
+let sessionMode=false,currentSessionId=null,currentTurnNumber=0,allSessions=[],expandedSessions=new Set(),expandedTurns=new Set();
+function startSession(){
+  sessionMode=true;currentSessionId='conv_'+Math.random().toString(36).slice(2,10);currentTurnNumber=0;
+  document.getElementById('session-start-btn').style.display='none';
+  document.getElementById('session-active-chip').classList.add('visible');
+  updateSessionChip();
+}
+function endSession(){
+  sessionMode=false;currentSessionId=null;currentTurnNumber=0;
+  document.getElementById('session-start-btn').style.display='';
+  document.getElementById('session-active-chip').classList.remove('visible');
+  loadSessions();
+}
+function updateSessionChip(){
+  document.getElementById('session-turn-lbl').textContent='Turn '+currentTurnNumber;
+  document.getElementById('session-id-lbl').textContent=currentSessionId||'';
+}
+async function loadSessions(){
+  try{ const r=await fetch(API+'/sessions'); if(r.ok) allSessions=await r.json(); }catch(_){}
+  renderSessionsPage();
+  const nb=document.getElementById('sessions-badge');
+  if(nb){ if(allSessions.length>0){nb.style.display='inline';nb.textContent=allSessions.length;}else nb.style.display='none'; }
+}
+function renderSessionsPage(){
+  const list=document.getElementById('session-list');
+  const emptyEl=document.getElementById('sessions-empty');
+  const sub=document.getElementById('sessions-page-sub');
+  if(!list) return;
+  if(sub) sub.textContent=allSessions.length+' session'+(allSessions.length!==1?'s':'')+' · '+allTraces.filter(t=>t.session_id).length+' session traces';
+  if(!allSessions.length){ list.innerHTML=''; if(emptyEl) emptyEl.style.display='block'; return; }
+  if(emptyEl) emptyEl.style.display='none';
+  list.innerHTML=allSessions.map(s=>{
+    const isOpen=expandedSessions.has(s.session_id);
+    const turns=allTraces.filter(t=>t.session_id===s.session_id).sort((a,b)=>a.start_time-b.start_time);
+    const dotCls=s.has_failure?'fail':'ok';
+    const duration=s.last_active&&s.started_at?((s.last_active-s.started_at)).toFixed(1)+'s':'—';
+    const startTs=s.started_at?new Date(s.started_at*1000).toLocaleTimeString():'';
+    return `<div class="sc-card ${s.has_failure?'has-fail':''} ${isOpen?'open':''}" id="sc-${s.session_id}">
+      <div class="sc-header" onclick="toggleSession('${s.session_id}')">
+        <div class="sc-dot ${dotCls}"></div>
+        <div class="sc-meta"><div class="sc-name">${esc(s.session_id)}</div><div class="sc-sub">${startTs} · ${duration} · ${s.user_id||'anonymous'}</div></div>
+        <div class="sc-right">
+          <span class="badge b-neu">💬 ${s.turn_count} turn${s.turn_count!==1?'s':''}</span>
+          ${s.total_cost>0?`<span class="badge b-neu">$${s.total_cost.toFixed(5)}</span>`:''}
+          ${s.has_failure?`<span class="badge b-fail">✕ failure</span>`:`<span class="badge b-ok">✓ clean</span>`}
+          <button class="sc-del-btn" onclick="deleteSession('${s.session_id}');event.stopPropagation()">✕</button>
+        </div>
+        <span class="sc-ci">▾</span>
+      </div>
+      <div class="sc-turns">
+        ${turns.length?turns.map((t,i)=>{
+          const tKey=s.session_id+'_'+t.trace_id;
+          const tOpen=expandedTurns.has(tKey);
+          const maxDur=Math.max(...(t.spans||[]).map(sp=>sp.duration_ms||0),1);
+          return `<div>
+            <div class="turn-row ${tOpen?'open':''}" onclick="toggleTurn('${tKey}')">
+              <span class="turn-num">T${t.turn_number||i+1}</span>
+              <div class="turn-dot ${t.status}"></div>
+              <div class="turn-meta"><div class="turn-name">${esc(t.name)}</div><div class="turn-sub">${t.trace_id.slice(0,18)}… · ${t.start_time?new Date(t.start_time*1000).toLocaleTimeString():''}</div></div>
+              <div class="turn-badges">
+                <span class="badge ${t.status==='success'?'b-ok':t.status==='failed'?'b-fail':'b-run'}">${t.status}</span>
+                <span class="badge b-neu">⏱ ${t.latency!=null?t.latency+'s':'…'}</span>
+                ${t.total_cost_usd>0?`<span class="badge b-neu">$${t.total_cost_usd.toFixed(5)}</span>`:''}
+              </div>
+              <span class="ci" style="color:var(--txt3);font-size:.76rem">▾</span>
+            </div>
+            <div class="turn-spans"><div class="turn-spans-inner">${buildTree(t.spans||[],null,maxDur)}</div></div>
+          </div>`;
+        }).join(''):'<div style="padding:12px 16px;font-size:.76rem;color:var(--txt3)">No traces yet.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+function toggleSession(id){
+  const card=document.getElementById('sc-'+id); if(!card) return;
+  const open=card.classList.toggle('open');
+  if(open) expandedSessions.add(id); else expandedSessions.delete(id);
+}
+function toggleTurn(key){
+  document.querySelectorAll('.turn-row').forEach(row=>{
+    if(row.getAttribute('onclick')&&row.getAttribute('onclick').includes(key)){
+      const wasOpen=row.classList.contains('open');
+      row.classList.toggle('open',!wasOpen);
+      const sp=row.nextElementSibling;
+      if(sp&&sp.classList.contains('turn-spans')){
+        if(!wasOpen){expandedTurns.add(key);sp.style.maxHeight='3000px';}
+        else{expandedTurns.delete(key);sp.style.maxHeight='0';}
+      }
+    }
+  });
+}
+async function deleteSession(id){
+  if(!confirm('Delete this session? Traces are kept.')) return;
+  try{
+    await fetch(API+'/sessions/'+id,{method:'DELETE'});
+    allSessions=allSessions.filter(s=>s.session_id!==id);
+    expandedSessions.delete(id); renderSessionsPage();
+    const nb=document.getElementById('sessions-badge');
+    if(nb){if(allSessions.length>0){nb.style.display='inline';nb.textContent=allSessions.length;}else nb.style.display='none';}
+  }catch(_){}
+}
+
+// ── Trace detail page ─────────────────────────────────
+let currentDetailId = null;
+
+function openTrace(id){
+  currentDetailId = id;
+  const trace = allTraces.find(t=>t.trace_id===id);
+  if(!trace) return;
+  renderDetailPage(trace);
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-trace-detail').classList.add('active');
+}
+
+function closeTrace(){
+  currentDetailId = null;
+  showPage('traces');
+}
+
+function navigateTrace(dir){
+  const list = visibleTraces();
+  const idx  = list.findIndex(t=>t.trace_id===currentDetailId);
+  if(idx===-1) return;
+  const next = list[idx+dir];
+  if(next) openTrace(next.trace_id);
+}
+
+function renderDetailPage(trace){
+  const spans   = trace.spans||legacySpans(trace.steps||[]);
+  const maxDur  = Math.max(...spans.map(s=>s.duration_ms||0),1);
+
+  // Breadcrumb + title
+  const titleEl = document.getElementById('detail-trace-title');
+  const bcEl    = document.getElementById('detail-breadcrumb-name');
+  const rtEl    = document.getElementById('detail-right-title');
+  if(titleEl) titleEl.textContent = trace.name;
+  if(bcEl)    bcEl.textContent    = trace.name;
+  if(rtEl)    rtEl.textContent    = trace.name;
+
+  // Badges
+  const badgesEl = document.getElementById('detail-badges');
+  if(badgesEl){
+    const sc = trace.status==='success'?'b-ok':trace.status==='failed'?'b-fail':'b-run';
+    badgesEl.innerHTML =
+      `<span class="badge ${sc}">${trace.status}</span>` +
+      (trace.latency!=null?`<span class="badge b-neu">⏱ ${trace.latency}s</span>`:'') +
+      (trace.total_cost_usd?`<span class="badge b-neu">$${trace.total_cost_usd.toFixed(5)}</span>`:'') +
+      `<span class="badge b-neu">${spans.length} spans</span>`;
+  }
+
+  // Navigation
+  const list = visibleTraces();
+  const idx  = list.findIndex(t=>t.trace_id===trace.trace_id);
+  const posEl=document.getElementById('detail-nav-pos');
+  if(posEl) posEl.textContent=(idx+1)+' / '+list.length;
+  const prevBtn=document.getElementById('detail-prev-btn');
+  const nextBtn=document.getElementById('detail-next-btn');
+  if(prevBtn) prevBtn.disabled = idx<=0;
+  if(nextBtn) nextBtn.disabled = idx>=list.length-1;
+
+  // Span tree (left)
+  const treeEl = document.getElementById('detail-span-tree');
+  if(treeEl) treeEl.innerHTML = buildTree(spans, null, maxDur);
+
+  // Input
+  const agentStartSpan = spans.find(s=>s.type==='agent_start');
+  const inputText = agentStartSpan?.metadata?.query
+    || agentStartSpan?.metadata?.input_preview
+    || trace.name || '—';
+  const inputEl = document.getElementById('detail-input-body');
+  if(inputEl) inputEl.textContent = inputText;
+
+  // Output
+  const responseSpan = spans.find(s=>s.type==='agent_response');
+  const outputText = responseSpan?.metadata?.response_preview || '—';
+  const outputEl = document.getElementById('detail-output-body');
+  if(outputEl) outputEl.textContent = outputText;
+
+  // Metadata
+  const metaEl   = document.getElementById('detail-meta-body');
+  const metaCard = document.getElementById('detail-meta-card');
+  const meta = {
+    trace_id:    trace.trace_id,
+    session_id:  trace.session_id||null,
+    user_id:     trace.user_id||null,
+    start_time:  trace.start_time?new Date(trace.start_time*1000).toLocaleString():null,
+    spans_total: trace.spans_total,
+    spans_ok:    trace.spans_success,
+    spans_failed:trace.spans_failed,
+    patterns:    trace.execution_patterns||[],
+  };
+  const cleanMeta = Object.fromEntries(Object.entries(meta).filter(([,v])=>v!=null&&v!==''));
+  if(metaEl)   metaEl.innerHTML = `<pre>${highlight(cleanMeta)}</pre>`;
+  if(metaCard) metaCard.style.display = Object.keys(cleanMeta).length?'':'none';
+
+  // Score buttons
+  refreshDetailScoreBtns(trace.trace_id);
+
+  // Judge / annotate
+  const judgeEl = document.getElementById('detail-judge-area');
+  if(judgeEl) judgeEl.innerHTML = renderDetailJudge(trace.trace_id);
+}
+
+function refreshDetailScoreBtns(id){
+  const s = allScores[id];
+  const up = document.getElementById('detail-btn-up');
+  const dn = document.getElementById('detail-btn-dn');
+  if(up){ up.className='detail-score-btn'+(s&&s.score===1?' active-up':''); }
+  if(dn){ dn.className='detail-score-btn'+(s&&s.score===-1?' active-dn':''); }
+}
+
+async function scoreDetailTrace(score){
+  if(!currentDetailId) return;
+  const id  = currentDetailId;
+  const curr= allScores[id];
+  const n   = (curr&&curr.score===score)?0:score;
+  if(n===0) delete allScores[id]; else allScores[id]={score:n};
+  try{ await fetch(API+'/score/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({score:n})}); }catch(_){}
+  refreshDetailScoreBtns(id);
+  const saved = document.getElementById('detail-score-saved');
+  if(saved){ saved.classList.add('show'); setTimeout(()=>saved.classList.remove('show'),2000); }
+}
+
+function renderDetailJudge(id){
+  const j = allJudgments[id];
+  if(!j) return `<button class="judge-btn" onclick="judgeDetailTrace('${id}')">⚖ Run Judge</button>`;
+  const icon={grounded:'✓',partial:'△',ungrounded:'✕'}[j.verdict]||'?';
+  return `<span class="judge-verdict ${j.verdict}" style="margin-right:8px">${icon} ${j.verdict}</span>`
+        +`<span class="judge-score" style="margin-right:8px">${(j.score*100).toFixed(0)}%</span>`
+        +`<span class="judge-reasoning">${esc(j.reasoning||'')}</span>`
+        +`<button class="judge-btn" style="margin-left:8px" onclick="judgeDetailTrace('${id}')" title="Re-run">↻ Re-run</button>`;
+}
+
+async function judgeDetailTrace(id){
+  const el = document.getElementById('detail-judge-area');
+  if(el) el.innerHTML='<span class="judge-loading">⏳ Judging…</span>';
+  try{
+    const r    = await fetch(API+'/judge/'+id,{method:'POST'});
+    const data = await r.json();
+    if(data.error){ if(el) el.innerHTML=`<span class="judge-error">⚠ ${esc(data.error)}</span>`; return; }
+    allJudgments[id] = data;
+    if(el) el.innerHTML = renderDetailJudge(id);
+    renderEvalsPage();
+  }catch(e){ if(el) el.innerHTML='<span class="judge-error">⚠ Backend unreachable</span>'; }
+}
+
+function openDetailDatasetPicker(){
+  if(!currentDetailId) return;
+  const btn = document.getElementById('detail-ds-btn');
+  openDatasetPicker(currentDetailId, btn);
+}
+
+// ── CSV export ────────────────────────────────────────
+function exportCSV(){ window.location.href=API+'/export/csv'; }
+
+// ── Agent selector ────────────────────────────────────
+function setAgent(type){
+  currentAgentType=type;
+  document.getElementById('agent-default').classList.toggle('active',type==='default');
+  document.getElementById('agent-langgraph').classList.toggle('active',type==='langgraph');
+  const input=document.getElementById('run-query');
+  if(type==='langgraph') input.value="What is NVIDIA's market cap and who founded the company?";
+  else input.value='What is LangChain?';
+}
+
+// ── Run agent ─────────────────────────────────────────
+async function runAgent(){
+  const btn=document.getElementById('run-btn');
+  const q=document.getElementById('run-query').value.trim()||'What is LangChain?';
+  btn.classList.add('loading'); btn.disabled=true;
+  if(sessionMode){currentTurnNumber++;updateSessionChip();}
+  const body={query:q,agent_type:currentAgentType};
+  if(sessionMode&&currentSessionId){body.session_id=currentSessionId;body.turn_number=currentTurnNumber;}
+  try{
+    const r=await fetch(API+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw 0;
+    await loadTraces();
+    if(sessionMode) loadSessions();
+  }catch(e){ alert('Backend not reachable.'); }
+  finally{ btn.classList.remove('loading'); btn.disabled=false; }
+}
+
+// ── Helpers ───────────────────────────────────────────
+function legacySpans(steps){ return steps.map((s,i)=>({span_id:String(i),parent_span_id:null,type:s.type,name:s.name,start_time:s.timestamp,duration_ms:null,metadata:s.metadata||{},status:s.status||'success',retry_count:0})); }
+function toggle(id){ openTrace(id); } // legacy — now opens detail page
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function highlight(obj){
+  return JSON.stringify(obj,null,2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="mk">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="ms">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g,': <span class="mn">$1</span>')
+    .replace(/: (true|false)/g,': <span class="mb2">$1</span>');
+}
+
+// ── Polling ───────────────────────────────────────────
+const cdEl=document.getElementById('cd');
+let insightTick=0;
+setInterval(()=>{
+  countdown--;
+  if(countdown<=0){ countdown=2; loadTraces(); insightTick++; if(insightTick>=5){insightTick=0;loadInsights();} }
+  if(cdEl) cdEl.textContent=countdown;
+},1000);
+loadTraces(); loadInsights(); loadScores(); loadJudgments(); loadDatasets(); loadSessions();
+
+// ── Panel resizer ────────────────────────────────────
+(function(){
+  const resizer  = document.getElementById('detail-resizer');
+  const leftEl   = document.querySelector('.detail-left');
+  const layoutEl = document.querySelector('.detail-layout');
+  if(!resizer||!leftEl||!layoutEl) return;
+
+  let active=false, startX=0, startW=0;
+
+  resizer.addEventListener('mousedown', e=>{
+    active  = true;
+    startX  = e.clientX;
+    startW  = leftEl.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor     = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e=>{
+    if(!active) return;
+    const dx    = e.clientX - startX;
+    const total = layoutEl.offsetWidth;
+    const newW  = Math.max(200, Math.min(total * 0.72, startW + dx));
+    leftEl.style.width = newW + 'px';
+  });
+
+  document.addEventListener('mouseup', ()=>{
+    if(!active) return;
+    active = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+  });
+})();
+</script>
+</body>
+</html>
